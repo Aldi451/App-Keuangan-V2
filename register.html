@@ -1,58 +1,59 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="id">
 <head>
-
-<title>Register</title>
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daftar Akun - Keuangan</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="style.css">
 </head>
+<body class="auth-page">
+    <div class="auth-card" style="max-width: 500px;">
+        <div class="auth-header">
+            <div class="auth-logo" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                <i class="bi bi-person-plus"></i>
+            </div>
+            <h1 class="auth-title">Buat Akun</h1>
+            <p class="auth-subtitle">Mulai kelola keuangan Anda dengan lebih rapih</p>
+        </div>
 
-<body class="bg-light">
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Username</label>
+                <input type="text" id="username" class="form-control" placeholder="user123">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">No. HP</label>
+                <input type="text" id="phone" class="form-control" placeholder="0812...">
+            </div>
+        </div>
 
-<div class="container">
+        <div class="mb-3">
+            <label class="form-label small fw-bold">Email</label>
+            <input type="email" id="email" class="form-control" placeholder="nama@email.com">
+        </div>
 
-<div class="row justify-content-center mt-5">
+        <div class="mb-4">
+            <label class="form-label small fw-bold">Password</label>
+            <div class="input-group">
+                <input type="password" id="password" class="form-control" placeholder="Minimal 6 karakter">
+                <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('password')">
+                    <i class="bi bi-eye"></i>
+                </button>
+            </div>
+        </div>
 
-<div class="col-md-4">
+        <button class="btn btn-success w-100 py-2 fw-bold" onclick="register()">
+            Daftar Akun Baru <i class="bi bi-check2-circle ms-2"></i>
+        </button>
 
-<div class="card p-4">
+        <div class="auth-footer">
+            Sudah punya akun? <a href="login.html">Login di sini</a>
+        </div>
+    </div>
 
-<h4 class="text-center">Register</h4>
-
-<input id="username" class="form-control mb-2" placeholder="Username">
-
-<input id="email" class="form-control mb-2" placeholder="Email">
-
-<input id="phone" class="form-control mb-2" placeholder="Nomor HP">
-
-<div class="input-group mb-3">
-
-<input type="password" id="password" class="form-control" placeholder="Password">
-
-<button class="btn btn-outline-secondary" onclick="togglePassword('password')">
-👁
-</button>
-
-</div>
-
-<button class="btn btn-success w-100" onclick="register()">Register</button>
-
-<div class="text-center mt-3">
-<a href="index.html">Kembali Login</a>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-<script src="auth.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="auth.js"></script>
 </body>
 </html>

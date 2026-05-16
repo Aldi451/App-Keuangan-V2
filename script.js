@@ -1,14 +1,7 @@
-let user=JSON.parse(localStorage.getItem("user"));
-
-if(!user){
-
-window.location.href="index.html";
-
-}
-
-const supabaseUrl = "https://rnllunfxsidqbjtojbjc.supabase.co";
-const supabaseKey = "sb_publishable_xKbmQSrlq3nEhcGTvNy4Ng_OGYh8_it";
-const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+// ==================== SUPABASE CONFIG ====================
+var supabaseUrl = "https://rnllunfxsidqbjtojbjc.supabase.co";
+var supabaseKey = "sb_publishable_xKbmQSrlq3nEhcGTvNy4Ng_OGYh8_it";
+var supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
 // ==================== GLOBAL VARIABLES ====================
 let chart = null;
@@ -19,259 +12,452 @@ let dbCategories = [];
 let comparisonData = null;
 let showMonthlyComparison = true;
 let showYearlyComparison = true;
+let currentUser = getCurrentUser();
+
+// ==================== AUTHENTICATION ====================
+function getCurrentUser() {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    try {
+        return JSON.parse(userStr);
+    } catch (e) {
+        return null;
+    }
+}
 
 // ==================== FORMAT FUNCTIONS ====================
 function formatRupiah(angka) {
-    if (angka === null || angka === undefined) return 'Rp 0';
-    return new Intl.NumberFormat('id-ID', {
-        style: 'currency',
-        currency: 'IDR',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    }).format(angka);
+  if (angka === null || angka === undefined) return 'Rp 0';
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(angka);
 }
-
 function formatTanggal(tanggal) {
-    if (!tanggal) return '-';
-    const date = new Date(tanggal);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}-${month}-${year}`;
+  if (!tanggal) return '-';
+  const d = new Date(tanggal);
+  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
 }
-
 function parseCurrencyInput(value) {
-    const cleaned = value.toString().replace(/[^0-9]/g, '');
-    return parseInt(cleaned) || 0;
+  return parseInt(value.toString().replace(/[^0-9]/g, '')) || 0;
 }
 
-// ==================== ANIMATION & AUTO-SIZE ====================
+// ==================== UI HELPERS ====================
 function adjustBalanceFontSize(element) {
-    if (!element) return;
-    const text = element.innerText;
-    const textLength = text.length;
-    element.style.fontSize = '';
-    element.style.whiteSpace = 'nowrap';
-    let fontSize = 20;
-    if (textLength > 18) {
-        fontSize = 14;
-    } else if (textLength > 15) {
-        fontSize = 16;
-    } else if (textLength > 12) {
-        fontSize = 18;
-    } else {
-        fontSize = 20;
-    }
-    if (window.innerWidth <= 576) {
-        if (textLength > 16) {
-            fontSize = 12;
-        } else if (textLength > 13) {
-            fontSize = 14;
-        } else {
-            fontSize = 16;
-        }
-    }
-    element.style.fontSize = fontSize + 'px';
-    element.style.lineHeight = '1.2';
+  if (!element) return;
+  const len = element.innerText.length;
+  const isMobile = window.innerWidth <= 576;
+  let size = len > 18 ? 14 : len > 15 ? 16 : len > 12 ? 18 : 20;
+  if (isMobile) {
+      size = len > 16 ? 11 : len > 13 ? 13 : 15;
+      element.style.whiteSpace = 'normal';
+      element.style.wordBreak = 'break-word';
+  } else {
+      element.style.whiteSpace = 'nowrap';
+  }
+  element.style.fontSize = size + 'px';
+  element.style.lineHeight = '1.2';
 }
-
 function adjustAllBalanceCards() {
-    const balanceElements = document.querySelectorAll('.balance-card h3');
-    balanceElements.forEach(el => adjustBalanceFontSize(el));
+  document.querySelectorAll('.balance-card h3').forEach(el => adjustBalanceFontSize(el));
 }
-
-// ==================== DEFAULT SETTINGS ====================
 function setDefaultTanggal() {
-    document.getElementById("tanggal").value = new Date().toISOString().split('T')[0];
+  const el = document.getElementById("tanggal");
+  if (el) el.value = new Date().toISOString().split('T')[0];
 }
-
 function setDefaultPeriode() {
-    const today = new Date();
-    document.getElementById("filterBulan").value = String(today.getMonth() + 1).padStart(2, '0');
-    document.getElementById("filterTahun").value = today.getFullYear();
+  const bulan = document.getElementById("filterBulan");
+  const tahun = document.getElementById("filterTahun");
+  const today = new Date();
+  if (bulan) bulan.value = String(today.getMonth() + 1).padStart(2, '0');
+  if (tahun) tahun.value = today.getFullYear();
 }
-
-function initYearDropdown() {
-    const yearSelect = document.getElementById("filterTahun");
-    if (!yearSelect) return;
-    const currentYear = new Date().getFullYear();
-    yearSelect.innerHTML = '';
-    for (let year = currentYear - 5; year <= currentYear + 1; year++) {
-        const option = document.createElement('option');
-        option.value = year;
-        option.innerText = year;
-        if (year === currentYear) option.selected = true;
-        yearSelect.appendChild(option);
-    }
-}
-
 function resetForm() {
-    editId = null;
-    document.getElementById("kategori").value = "";
-    document.getElementById("jumlah").value = "";
-    document.getElementById("keterangan").value = "";
-    document.getElementById("btnSimpan").innerHTML = '<i class="bi bi-save"></i> Simpan';
-    setDefaultTanggal();
+  editId = null;
+  const elK = document.getElementById("kategori");
+  const elJ = document.getElementById("jumlah");
+  const elKet = document.getElementById("keterangan");
+  const elBtn = document.getElementById("btnSimpan");
+  if (elK) elK.value = "";
+  if (elJ) elJ.value = "";
+  if (elKet) elKet.value = "";
+  if (elBtn) elBtn.innerHTML = '<i class="bi bi-save"></i> Simpan';
+  setDefaultTanggal();
 }
 
 // ==================== CATEGORY FUNCTIONS ====================
+
 async function fetchCategoriesFromDB() {
     try {
         let { data, error } = await supabaseClient
             .from("kategori")
             .select("nama_kategori")
             .order("nama_kategori", { ascending: true });
-        if (error) {
-            data = [
-                { nama_kategori: 'Makanan' }, { nama_kategori: 'Transportasi' },
-                { nama_kategori: 'Belanja' }, { nama_kategori: 'Kesehatan' },
-                { nama_kategori: 'Pendidikan' }, { nama_kategori: 'Hiburan' },
-                { nama_kategori: 'Tagihan' }, { nama_kategori: 'Payroll' },
-                { nama_kategori: 'Bonus tahunan' }, { nama_kategori: 'Investasi' },
-                { nama_kategori: 'Tarik tunai' }, { nama_kategori: 'Fee bank' },
-                { nama_kategori: 'Balancing' }, { nama_kategori: 'Top up' },
-                { nama_kategori: 'Bank transfer' }, { nama_kategori: 'Lain-lain' }
-            ];
+        
+        if (error || !data) {
+            // Fallback list
+            dbCategories = ['Makanan','Transportasi','Belanja','Kesehatan','Pendidikan','Hiburan','Tagihan','Payroll','Investasi','Lain-lain'];
+        } else {
+            dbCategories = data.map(r => r.nama_kategori).filter(Boolean);
         }
-        dbCategories = data.map(row => row.nama_kategori).filter(n => n);
         updateDatalist();
-    } catch (err) {
-        dbCategories = ['Makanan', 'Transportasi', 'Belanja', 'Kesehatan', 'Pendidikan', 'Hiburan', 'Tagihan', 'Payroll', 'Bonus tahunan', 'Investasi','Tarik tunai', 'Fee bank', 'Balancing','Top up', 'Bank transfer', 'Lain-lain'];
-        updateDatalist();
+    } catch (e) {
+        console.error('Error fetching categories:', e);
     }
 }
 
 function initCategoryLookup() {
-    const suggestions = document.getElementById('kategoriSuggestions');
+    const sug = document.getElementById('kategoriSuggestions');
     const input = document.getElementById('kategori');
+    if (!sug || !input) return;
+
     fetchCategoriesFromDB();
+
     input.addEventListener('input', function() {
-        const value = this.value.toLowerCase().trim();
-        if (!value) { suggestions.classList.remove('show'); return; }
-        const matches = dbCategories.filter(cat => cat.toLowerCase().includes(value) && cat.toLowerCase() !== value);
-        if (matches.length > 0) {
-            suggestions.innerHTML = matches.map(cat => `<div onclick="selectCategory('${cat.replace(/'/g, "\\'")}')">${cat}</div>`).join('');
-            if (!dbCategories.some(c => c.toLowerCase() === value)) {
-                suggestions.innerHTML += `<div class="add-new" onclick="addNewCategory('${value}')">+ Tambahkan "${input.value}"</div>`;
-            }
-            suggestions.classList.add('show');
+        const val = this.value.toLowerCase().trim();
+        sug.innerHTML = '';
+        
+        if (!val) { 
+            sug.classList.remove('show'); 
+            return; 
+        }
+
+        // Find matches that are NOT the exact value
+        const matches = dbCategories.filter(c => c.toLowerCase().includes(val));
+        
+        matches.forEach(c => {
+            const d = document.createElement('div');
+            d.innerHTML = `<i class="bi bi-tag"></i> ${c}`;
+            d.onclick = () => {
+                input.value = c;
+                sug.classList.remove('show');
+            };
+            sug.appendChild(d);
+        });
+
+        // Check for exact match to decide whether to show "Add New"
+        const exactMatch = dbCategories.some(c => c.toLowerCase() === val);
+        if (!exactMatch && val.length > 0) {
+            const addDiv = document.createElement('div');
+            addDiv.className = 'add-new';
+            addDiv.innerHTML = `<i class="bi bi-plus-circle"></i> Tambah manual: "<b>${input.value}</b>"`;
+            addDiv.onclick = async () => {
+                await addNewCategory(input.value);
+                sug.classList.remove('show');
+            };
+            sug.appendChild(addDiv);
+        }
+
+        if (sug.children.length > 0) {
+            sug.classList.add('show');
         } else {
-            suggestions.innerHTML = `<div class="add-new" onclick="addNewCategory('${value}')">+ Tambahkan "${input.value}"</div>`;
-            suggestions.classList.add('show');
+            sug.classList.remove('show');
         }
     });
-    input.addEventListener('blur', () => setTimeout(() => suggestions.classList.remove('show'), 200));
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') suggestions.classList.remove('show'); });
+
+    // Close suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !sug.contains(e.target)) {
+            sug.classList.remove('show');
+        }
+    });
 }
 
 function updateDatalist() {
     const datalist = document.getElementById('kategoriList');
     if (!datalist) return;
-    datalist.innerHTML = dbCategories.sort().map(cat => `<option value="${cat.replace(/"/g, '&quot;')}">`).join('');
+    datalist.innerHTML = dbCategories.map(c => `<option value="${c}">`).join('');
 }
 
-function selectCategory(category) {
-    document.getElementById('kategori').value = category;
-    document.getElementById('kategoriSuggestions').classList.remove('show');
-}
-
-async function addNewCategory(category) {
-    if (!category || !category.trim()) return;
-    const categoryName = category.trim();
-    if (dbCategories.includes(categoryName)) {
-        document.getElementById('kategori').value = categoryName;
-        document.getElementById('kategoriSuggestions').classList.remove('show');
-        return;
-    }
-    try {
-        const { error } = await supabaseClient.from("kategori").insert([{ nama_kategori: categoryName }]);
-        if (error) {
-            dbCategories.push(categoryName);
-            dbCategories.sort();
-            updateDatalist();
-        } else {
-            await fetchCategoriesFromDB();
+async function addNewCategory(cat) {
+    if (!cat || !cat.trim()) return;
+    const name = cat.trim();
+    
+    // Final check for duplicates before insert (case-insensitive)
+    const exists = dbCategories.some(c => c.toLowerCase() === name.toLowerCase());
+    
+    if (!exists) {
+        try {
+            const { error } = await supabaseClient
+                .from("kategori")
+                .insert([{ nama_kategori: name }]);
+            
+            if (!error) {
+                dbCategories.push(name);
+                dbCategories.sort();
+                updateDatalist();
+            }
+        } catch(e) { 
+            console.error('Error adding category:', e); 
         }
-        document.getElementById('kategori').value = categoryName;
-        document.getElementById('kategoriSuggestions').classList.remove('show');
-    } catch (err) {
-        dbCategories.push(categoryName);
-        dbCategories.sort();
-        updateDatalist();
-        document.getElementById('kategori').value = categoryName;
-        document.getElementById('kategoriSuggestions').classList.remove('show');
     }
+    
+    // Set the input value to the category name regardless
+    document.getElementById('kategori').value = name;
 }
 
 // ==================== CURRENCY INPUT ====================
 function initCurrencyInput() {
-    const input = document.getElementById('jumlah');
-    input.addEventListener('input', function() {
-        let value = this.value.replace(/[^0-9]/g, '');
-        if (value) this.value = new Intl.NumberFormat('id-ID').format(parseInt(value));
-    });
-    input.addEventListener('paste', function(e) {
-        e.preventDefault();
-        const pasted = e.clipboardData.getData('text').replace(/[^0-9]/g, '');
-        if (pasted) this.value = new Intl.NumberFormat('id-ID').format(parseInt(pasted));
-    });
-    input.addEventListener('blur', function() {
-        if (this.value) {
-            const num = parseInt(this.value.replace(/[^0-9]/g, ''));
-            this.value = new Intl.NumberFormat('id-ID').format(num);
-        }
-    });
-    input.addEventListener('focus', function() {
-        if (this.value) this.value = this.value.replace(/[^0-9]/g, '');
-    });
+  const input = document.getElementById('jumlah');
+  if (!input) return;
+  input.addEventListener('input', function() {
+    let v = this.value.replace(/[^0-9]/g, '');
+    if (v) this.value = new Intl.NumberFormat('id-ID').format(parseInt(v));
+  });
+  input.addEventListener('blur', function() {
+    if (this.value) this.value = new Intl.NumberFormat('id-ID').format(parseInt(this.value.replace(/[^0-9]/g, '')));
+  });
+  input.addEventListener('focus', function() {
+    if (this.value) this.value = this.value.replace(/[^0-9]/g, '');
+  });
 }
 
 // ==================== TOGGLE SECTION ====================
 function toggleSection(sectionId, btn) {
-    const section = document.getElementById(sectionId);
-    const icon = btn ? btn.querySelector('i') : null;
-    if (!section) return;
-    
-    if (section.classList.contains('collapsed')) {
-        // Show section
-        section.classList.remove('collapsed');
-        if (icon) icon.style.transform = 'rotate(0deg)';
-        
-        // Load data after section is visible
-        if (sectionId === 'sectionGrafik') setTimeout(() => loadData(), 150);
-        if (sectionId === 'sectionSummary') setTimeout(() => generateSummaryCategory(), 150);
-        if (sectionId === 'sectionTransaksi') setTimeout(() => loadData(), 150);
-        if (sectionId === 'sectionPembanding') {
-            setTimeout(() => {
-                initComparisonYearDropdown();
-                generateComparison();
-            }, 150);
-        }
-    } else {
-        // Hide section
-        section.classList.add('collapsed');
-        if (icon) icon.style.transform = 'rotate(-90deg)';
-    }
-    // NOTE: Jangan tambahkan class 'collapsed' ke tombol!
+  // Hide all sections first for a cleaner transition if desired, 
+  // or keep current behavior of multiple sections open.
+  // User asked for a "cool sidebar", usually that implies switching views.
+  
+  const sections = ['sectionGrafik', 'sectionSummary', 'sectionTransaksi', 'sectionPembanding'];
+  sections.forEach(id => {
+    const s = document.getElementById(id);
+    if (s) s.classList.add('collapsed');
+  });
+
+  const sec = document.getElementById(sectionId);
+  if (!sec) return;
+
+  sec.classList.remove('collapsed');
+  
+  // Update active state in sidebar
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  setTimeout(() => {
+    if (sectionId === 'sectionGrafik') loadData();
+    if (sectionId === 'sectionTransaksi') loadData();
+    if (sectionId === 'sectionPembanding') { initComparisonYearDropdown(); generateComparison(); }
+    if (sectionId === 'sectionSummary') generateSummaryCategory();
+  }, 150);
 }
-// ==================== COMPARISON FUNCTIONS ====================
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (sidebar && overlay) {
+        sidebar.classList.toggle('show');
+        overlay.classList.toggle('show');
+    }
+}
+
+function toggleSidebarMobile() {
+    if (window.innerWidth <= 1024) {
+        toggleSidebar();
+    }
+}
+
+function toggleSidebarCollapse() {
+    const sidebar = document.getElementById('sidebar');
+    const isCollapsed = sidebar.classList.toggle('is-collapsed');
+    
+    localStorage.setItem('sidebarCollapsed', isCollapsed);
+    
+    // Adjust charts and layout after transition
+    setTimeout(() => {
+        adjustAllBalanceCards();
+        if (chart) chart.resize();
+        if (chartKategori) chartKategori.resize();
+        if (chartTrend) chartTrend.resize();
+    }, 300);
+}
+
+// ==================== THEME FUNCTIONS ====================
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+}
+
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    
+    const icon = document.querySelector('#themeToggle i');
+    if (icon) {
+        icon.className = theme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
+    }
+    
+    // Update Chart defaults
+    updateChartTheme(theme);
+    
+    // Redraw charts if they exist
+    if (chart) loadData(); // Reload data will redraw charts with new theme colors
+}
+
+function updateChartTheme(theme) {
+    if (typeof Chart === 'undefined') return;
+    
+    const textColor = theme === 'dark' ? '#94a3b8' : '#64748b';
+    const gridColor = theme === 'dark' ? '#334155' : '#e2e8f0';
+    
+    Chart.defaults.color = textColor;
+    Chart.defaults.scale.grid.color = gridColor;
+}
+
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    setTheme(savedTheme);
+}
+
+// ==================== LOAD DATA (DIPERBAIKI & DEFENSIF) ====================
+async function loadData() {
+  const tblEl = document.getElementById("tabelTransaksi");
+  if (!tblEl) return; // Halaman tidak punya tabel, berhenti aman
+
+  const bulanEl = document.getElementById("filterBulan");
+  const tahunEl = document.getElementById("filterTahun");
+  const loadingTable = document.getElementById('loadingTable');
+  const countEl = document.getElementById("transactionCount");
+
+  if (loadingTable) loadingTable.classList.add('show');
+
+  const bulan = bulanEl?.value;
+  const tahun = tahunEl?.value;
+  let awal = null, akhir = null;
+  if (bulan && tahun) {
+    awal = `${tahun}-${bulan}-01`;
+    const last = new Date(tahun, parseInt(bulan), 0).getDate();
+    akhir = `${tahun}-${bulan}-${String(last).padStart(2,'0')}`;
+  }
+
+  let opening = 0;
+  if (awal) {
+    const { data: before } = await supabaseClient.from("transaksi").select("jenis, jumlah").lt("tanggal", awal).eq("user_id", currentUser.id);
+    if (before) before.forEach(r => { opening += r.jenis === "Masuk" ? (r.jumlah||0) : -(r.jumlah||0); });
+  }
+
+  let query = supabaseClient.from("transaksi").select("id, tanggal, jenis, kategori, jumlah, keterangan").eq("user_id", currentUser.id).order("tanggal", { ascending: true });
+  if (awal && akhir) query = query.gte("tanggal", awal).lte("tanggal", akhir);
+
+  const { data, error } = await query;
+  if (loadingTable) loadingTable.classList.remove('show');
+  if (error) { tblEl.innerHTML = `<tr><td colspan="7" class="text-center text-danger">❌ ${error.message}</td></tr>`; return; }
+
+  let html = "", masuk = 0, keluar = 0, saldo = opening;
+  if (!data || data.length === 0) {
+    tblEl.innerHTML = `<tr><td colspan="7" class="text-center text-muted">📭 Belum ada transaksi</td></tr>`;
+    if (countEl) countEl.innerText = "0 transaksi";
+    updateBalanceCards(opening, 0, 0, opening, 0);
+    return;
+  }
+
+  data.forEach(r => {
+    const amt = r.jumlah || 0;
+    if (r.jenis === "Masuk") { masuk += amt; saldo += amt; } else { keluar += amt; saldo -= amt; }
+    const cls = r.jenis === "Masuk" ? "success" : "danger";
+    html += `<tr>
+      <td><small>${formatTanggal(r.tanggal)}</small></td>
+      <td><span class="badge bg-${cls}">${r.jenis}</span></td>
+      <td>${r.kategori || '-'}</td>
+      <td class="text-end fw-bold text-${cls}">${formatRupiah(amt)}</td>
+      <td><small>${r.keterangan || '-'}</small></td>
+      <td class="text-end"><small>${formatRupiah(saldo)}</small></td>
+      <td class="text-center">
+        <button class="btn btn-warning btn-sm py-0 px-2 me-1" onclick='editData("${r.id}", "${r.tanggal}", "${r.jenis}", "${r.kategori}", "${r.jumlah}", "${r.keterangan||""}")'><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-danger btn-sm py-0 px-2" onclick="hapusData('${r.id}')"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`;
+  });
+
+  tblEl.innerHTML = html;
+  const ending = opening + (masuk - keluar);
+  if (countEl) countEl.innerText = `${data.length} transaksi`;
+  updateBalanceCards(opening, masuk, keluar, ending, data.length);
+
+  // Update visualizations if sections are open
+  if (!document.getElementById('sectionGrafik').classList.contains('collapsed')) {
+    buatChart(masuk, keluar);
+    buatChartKategori(data);
+    buatTrend();
+  }
+  if (!document.getElementById('sectionSummary').classList.contains('collapsed')) {
+    generateSummaryCategory(data);
+  }
+}
+
+function updateBalanceCards(o, m, k, e, t) {
+  const el = id => document.getElementById(id);
+  if(el("openingBalance")) el("openingBalance").innerText = formatRupiah(o);
+  if(el("totalMasuk")) el("totalMasuk").innerText = formatRupiah(m);
+  if(el("totalKeluar")) el("totalKeluar").innerText = formatRupiah(k);
+  if(el("endingBalance")) el("endingBalance").innerText = formatRupiah(e);
+  setTimeout(adjustAllBalanceCards, 100);
+}
+
+// ==================== SAVE, EDIT, DELETE ====================
+async function simpan() {
+  const tanggal = document.getElementById("tanggal")?.value;
+  const jenis = document.getElementById("jenis")?.value;
+  const kategori = document.getElementById("kategori")?.value.trim();
+  const jumlah = parseCurrencyInput(document.getElementById("jumlah")?.value || "");
+  const keterangan = document.getElementById("keterangan")?.value.trim();
+  if (!tanggal || !kategori || !jumlah) { alert("⚠️ Data belum lengkap!"); return; }
+
+  const payload = { tanggal, jenis, kategori, jumlah, keterangan: keterangan || null, user_id: currentUser.id };
+  try {
+    const { error } = editId 
+      ? await supabaseClient.from("transaksi").update(payload).eq("id", editId)
+      : await supabaseClient.from("transaksi").insert([payload]);
+    if (error) throw error;
+    alert(editId ? "✅ Data diupdate" : "✅ Data disimpan");
+    resetForm(); loadData();
+  } catch(e) { alert("❌ " + e.message); }
+}
+
+function editData(id, t, j, k, n, ket) {
+  editId = id;
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+  set("tanggal", t); set("jenis", j); set("kategori", k);
+  set("jumlah", n ? new Intl.NumberFormat('id-ID').format(n) : ""); set("keterangan", ket);
+  document.getElementById("btnSimpan").innerHTML = '<i class="bi bi-pencil"></i> Update';
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function hapusData(id) {
+  if (!confirm("⚠️ Yakin ingin menghapus?")) return;
+  const { error } = await supabaseClient.from("transaksi").delete().eq("id", id).eq("user_id", currentUser.id);
+  if (error) { 
+    alert(error.code === '42501' ? "❌ Izin hapus ditolak. Aktifkan Policy DELETE di Supabase." : "❌ " + error.message); 
+    return; 
+  }
+  alert("✅ Berhasil dihapus"); loadData();
+}
+
+// ==================== CHARTS & SUMMARY (Dipotong demi ringkas, logic aman) ====================
+function initYearDropdown() {
+  const el = document.getElementById("filterTahun");
+  if (!el) return;
+  el.innerHTML = '';
+  const cy = new Date().getFullYear();
+  // Provide 10 years back and 5 years forward for better flexibility
+  for(let y=cy-10; y<=cy+5; y++) {
+    const opt = document.createElement('option');
+    opt.value = y; opt.innerText = y;
+    if(y===cy) opt.selected = true;
+    el.appendChild(opt);
+  }
+}
 function initComparisonYearDropdown() {
-    const yearSelect = document.getElementById('filterTahunPembanding');
-    if (!yearSelect) return;
-    const currentYear = new Date().getFullYear();
-    yearSelect.innerHTML = '';
-    for (let year = currentYear - 5; year <= currentYear; year++) {
-        const option = document.createElement('option');
-        option.value = year;
-        option.innerText = year;
-        if (year === currentYear) option.selected = true;
-        yearSelect.appendChild(option);
-    }
-    const monthSelect = document.getElementById('filterBulanPembanding');
-    if (monthSelect) {
-        const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
-        monthSelect.value = currentMonth;
-    }
+  const el = document.getElementById("filterTahunPembanding");
+  if(!el) return;
+  el.innerHTML = '';
+  const cy = new Date().getFullYear();
+  // Provide 10 years back and 5 years forward
+  for(let y=cy-10; y<=cy+5; y++) {
+    const opt = document.createElement('option');
+    opt.value = y; opt.innerText = y;
+    if(y===cy) opt.selected = true;
+    el.appendChild(opt);
+  }
+  const bm = document.getElementById("filterBulanPembanding");
+  if(bm) bm.value = String(new Date().getMonth()+1).padStart(2,'0');
 }
 
 function toggleComparisonView() {
@@ -286,16 +472,21 @@ async function generateComparison() {
     const container = document.getElementById('comparisonContainer');
     const categoryBody = document.getElementById('categoryComparisonBody');
     const recommendationContainer = document.getElementById('recommendationContainer');
+    
     if (!container) return;
+    
     container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div><p class="mt-2">Memuat data perbandingan...</p></div>';
+    
     try {
         const bulan = document.getElementById('filterBulanPembanding').value;
         const tahun = document.getElementById('filterTahunPembanding').value;
+        
         const currentPeriod = await getPeriodData(tahun, bulan);
         const prevMonthData = await getPreviousMonthData(tahun, bulan);
         const prevYearData = await getPreviousYearData(tahun, bulan);
         const currentYearData = await getYearData(tahun);
         const prevYearTotalData = await getYearData(parseInt(tahun) - 1);
+        
         comparisonData = {
             current: currentPeriod,
             prevMonth: prevMonthData,
@@ -303,6 +494,7 @@ async function generateComparison() {
             currentYear: currentYearData,
             prevYearTotal: prevYearTotalData
         };
+        
         renderComparisonCards(container);
         renderCategoryComparison(categoryBody, currentPeriod, prevMonthData);
         generateRecommendations(recommendationContainer, currentPeriod, prevMonthData, prevYearData);
@@ -316,26 +508,33 @@ async function getPeriodData(tahun, bulan) {
     const awal = `${tahun}-${bulan}-01`;
     const lastDay = new Date(tahun, parseInt(bulan), 0).getDate();
     const akhir = `${tahun}-${bulan}-${String(lastDay).padStart(2, '0')}`;
+    
     const { data, error } = await supabaseClient
         .from('transaksi')
         .select('tanggal, jenis, kategori, jumlah')
+        .eq('user_id', currentUser.id)
         .gte('tanggal', awal)
         .lte('tanggal', akhir);
+    
     if (error || !data) return { masuk: 0, keluar: 0, categories: {} };
+    
     let masuk = 0, keluar = 0;
     const categories = {};
+    
     data.forEach(row => {
         const amount = row.jumlah || 0;
         if (row.jenis === 'Masuk') {
             masuk += amount;
         } else {
             keluar += amount;
-            if (row.kategori) {
-                const normalizedCat = row.kategori.trim();
-                categories[normalizedCat] = (categories[normalizedCat] || 0) + amount;
-            }
+        }
+        
+        if (row.kategori) {
+            const normalizedCat = row.kategori.trim();
+            categories[normalizedCat] = (categories[normalizedCat] || 0) + amount;
         }
     });
+    
     return { masuk, keluar, categories, saldo: masuk - keluar };
 }
 
@@ -357,14 +556,19 @@ async function getPreviousYearData(tahun, bulan) {
 async function getYearData(tahun) {
     const awal = `${tahun}-01-01`;
     const akhir = `${tahun}-12-31`;
+    
     const { data, error } = await supabaseClient
         .from('transaksi')
         .select('tanggal, jenis, kategori, jumlah')
+        .eq('user_id', currentUser.id)
         .gte('tanggal', awal)
         .lte('tanggal', akhir);
+    
     if (error || !data) return { masuk: 0, keluar: 0, categories: {} };
+    
     let masuk = 0, keluar = 0;
     const categories = {};
+    
     data.forEach(row => {
         const amount = row.jumlah || 0;
         if (row.jenis === 'Masuk') {
@@ -377,6 +581,7 @@ async function getYearData(tahun) {
             }
         }
     });
+    
     return { masuk, keluar, categories, saldo: masuk - keluar };
 }
 
@@ -391,6 +596,7 @@ function formatPercentage(percentage, isExpense = true) {
     const absPercentage = Math.abs(percentage).toFixed(1);
     const isIncrease = percentage > 0;
     const isDecrease = percentage < 0;
+    
     let isGood, colorClass, icon;
     if (isExpense) {
         isGood = isDecrease;
@@ -401,6 +607,7 @@ function formatPercentage(percentage, isExpense = true) {
         colorClass = isGood ? 'text-success' : 'text-danger';
         icon = isIncrease ? '↑' : '↓';
     }
+    
     const sign = isDecrease ? '-' : '';
     return `<span class="${colorClass} fw-bold text-nowrap">${icon} ${sign}${absPercentage}%</span>`;
 }
@@ -411,6 +618,7 @@ function formatChangeDescription(percentage, isExpense = true) {
     }
     const isIncrease = percentage > 0;
     const isDecrease = percentage < 0;
+    
     let text, badgeClass;
     if (isExpense) {
         if (isIncrease) {
@@ -436,10 +644,12 @@ function renderComparisonCards(container) {
     if (!comparisonData) return;
     const { current, prevMonth, currentYear, prevYearTotal } = comparisonData;
     let html = '';
+    
     if (showMonthlyComparison) {
         const monthChangeMasuk = calculateChange(current.masuk, prevMonth.masuk);
         const monthChangeKeluar = calculateChange(current.keluar, prevMonth.keluar);
         const monthChangeSaldo = calculateChange(current.saldo, prevMonth.saldo);
+        
         html += `
         <div class="card bg-light mb-3">
             <div class="card-header bg-warning">
@@ -468,9 +678,9 @@ function renderComparisonCards(container) {
                     <div class="col-md-4 col-sm-12 mb-2">
                         <div class="p-3 border rounded comparison-card">
                             <small class="text-muted d-block mb-1">Saldo Bersih</small>
-                            <h4 class="${current.saldo >= 0 ? 'text-success' : 'text-danger'} mb-1 text-nowrap">${formatRupiah(Math.abs(current.saldo))}</h4>
+                            <h4 class="${current.saldo >= 0 ? 'text-success' : 'text-danger'} mb-1 text-nowrap">${formatRupiah(current.saldo)}</h4>
                             <div class="small">${formatPercentage(monthChangeSaldo, false)}</div>
-                            <div class="text-muted small text-nowrap">vs ${formatRupiah(Math.abs(prevMonth.saldo))}</div>
+                            <div class="text-muted small text-nowrap">vs ${formatRupiah(prevMonth.saldo)}</div>
                             <div class="mt-1">${formatChangeDescription(monthChangeSaldo, false)}</div>
                         </div>
                     </div>
@@ -479,10 +689,12 @@ function renderComparisonCards(container) {
         </div>
         `;
     }
+    
     if (showYearlyComparison) {
         const yearChangeMasuk = calculateChange(currentYear.masuk, prevYearTotal.masuk);
         const yearChangeKeluar = calculateChange(currentYear.keluar, prevYearTotal.keluar);
         const yearChangeSaldo = calculateChange(currentYear.saldo, prevYearTotal.saldo);
+        
         html += `
         <div class="card bg-light mb-3">
             <div class="card-header bg-info text-white">
@@ -511,9 +723,9 @@ function renderComparisonCards(container) {
                     <div class="col-md-4 col-sm-12 mb-2">
                         <div class="p-3 border rounded comparison-card">
                             <small class="text-muted d-block mb-1">Saldo Bersih Tahunan</small>
-                            <h4 class="${currentYear.saldo >= 0 ? 'text-success' : 'text-danger'} mb-1 text-nowrap">${formatRupiah(Math.abs(currentYear.saldo))}</h4>
+                            <h4 class="${currentYear.saldo >= 0 ? 'text-success' : 'text-danger'} mb-1 text-nowrap">${formatRupiah(currentYear.saldo)}</h4>
                             <div class="small">${formatPercentage(yearChangeSaldo, false)}</div>
-                            <div class="text-muted small text-nowrap">vs ${formatRupiah(Math.abs(prevYearTotal.saldo))}</div>
+                            <div class="text-muted small text-nowrap">vs ${formatRupiah(prevYearTotal.saldo)}</div>
                             <div class="mt-1">${formatChangeDescription(yearChangeSaldo, false)}</div>
                         </div>
                     </div>
@@ -522,51 +734,34 @@ function renderComparisonCards(container) {
         </div>
         `;
     }
-    if (showMonthlyComparison) {
-        const monthChangeMasuk = calculateChange(current.masuk, prevMonth.masuk);
-        const monthChangeKeluar = calculateChange(current.keluar, prevMonth.keluar);
-        html += `
-        <div class="row">
-            <div class="col-md-6 col-sm-12 mb-2">
-                <div class="card border-success h-100">
-                    <div class="card-body text-center">
-                        <h6 class="text-success">📈 Tren Pemasukan</h6>
-                        <h3 class="text-nowrap">${monthChangeMasuk >= 0 ? 'Meningkat' : 'Menurun'}</h3>
-                        <small class="text-muted">${Math.abs(monthChangeMasuk).toFixed(1)}% dari bulan lalu</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-sm-12 mb-2">
-                <div class="card border-danger h-100">
-                    <div class="card-body text-center">
-                        <h6 class="text-danger">📉 Tren Pengeluaran</h6>
-                        <h3 class="text-nowrap">${monthChangeKeluar <= 0 ? 'Menghemat' : 'Meningkat'}</h3>
-                        <small class="text-muted">${Math.abs(monthChangeKeluar).toFixed(1)}% dari bulan lalu</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-        `;
-    }
+    
     container.innerHTML = html;
 }
 
 function renderCategoryComparison(container, current, prevMonth) {
-    const allCategories = new Set([...Object.keys(current.categories), ...Object.keys(prevMonth.categories)]);
+    if (!container) return;
+    
+    // Include all categories from database + any categories found in transactions
+    const allCategories = new Set([...dbCategories, ...Object.keys(current.categories), ...Object.keys(prevMonth.categories)]);
+    
     if (allCategories.size === 0) {
         container.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3"><small>Belum ada data kategori</small></td></tr>';
         return;
     }
+    
     let tableRows = '';
     const sortedCategories = Array.from(allCategories).sort();
+    
     sortedCategories.forEach(category => {
         const currentAmount = current.categories[category] || 0;
         const prevAmount = prevMonth.categories[category] || 0;
         const selisih = currentAmount - prevAmount;
         const change = calculateChange(currentAmount, prevAmount);
+        
         const selisihFormatted = selisih >= 0 ? 
             `<span class="text-danger text-nowrap">+${formatRupiah(selisih)}</span>` : 
             `<span class="text-success text-nowrap">${formatRupiah(selisih)}</span>`;
+        
         tableRows += `
             <tr>
                 <td class="fw-bold text-nowrap">${category}</td>
@@ -578,84 +773,24 @@ function renderCategoryComparison(container, current, prevMonth) {
             </tr>
         `;
     });
+    
     container.innerHTML = tableRows;
 }
 
 function generateRecommendations(container, current, prevMonth, prevYear) {
+    if (!container) return;
     const recommendations = [];
+    
     const incomeChange = calculateChange(current.masuk, prevMonth.masuk);
     if (incomeChange < -10) {
-        recommendations.push({
-            type: 'warning',
-            icon: '⚠️',
-            title: 'Pemasukan Menurun',
-            message: `Pemasukan Anda turun ${Math.abs(incomeChange).toFixed(1)}% dari bulan lalu. Pertimbangkan untuk mencari sumber pendapatan tambahan.`
-        });
-    } else if (incomeChange > 20) {
-        recommendations.push({
-            type: 'success',
-            icon: '🎉',
-            title: 'Pemasukan Meningkat',
-            message: `Pemasukan Anda naik ${incomeChange.toFixed(1)}%! Pertahankan strategi yang berhasil.`
-        });
+        recommendations.push({ type: 'warning', icon: '⚠️', title: 'Pemasukan Menurun', message: `Pemasukan Anda turun ${Math.abs(incomeChange).toFixed(1)}% dari bulan lalu.` });
     }
+    
     const expenseChange = calculateChange(current.keluar, prevMonth.keluar);
     if (expenseChange > 15) {
-        recommendations.push({
-            type: 'danger',
-            icon: '🚨',
-            title: 'Pengeluaran Meningkat Tajam',
-            message: `Pengeluaran naik ${expenseChange.toFixed(1)}%. Tinjau kategori dengan peningkatan tertinggi dan kurangi belanja tidak perlu.`
-        });
-    } else if (expenseChange < -10) {
-        recommendations.push({
-            type: 'success',
-            icon: '💰',
-            title: 'Pengeluaran Berkurang',
-            message: `Pengeluaran turun ${Math.abs(expenseChange).toFixed(1)}%. Bagus! Teruskan kebiasaan hemat ini.`
-        });
+        recommendations.push({ type: 'danger', icon: '🚨', title: 'Pengeluaran Meningkat Tajam', message: `Pengeluaran naik ${expenseChange.toFixed(1)}%.` });
     }
-    const savingsRate = current.masuk > 0 ? ((current.masuk - current.keluar) / current.masuk) * 100 : 0;
-    if (savingsRate < 10 && current.masuk > 0) {
-        recommendations.push({
-            type: 'warning',
-            icon: '📊',
-            title: 'Tingkat Tabungan Rendah',
-            message: `Hanya ${savingsRate.toFixed(1)}% pemasukan yang ditabung. Targetkan minimal 20% untuk keuangan yang sehat.`
-        });
-    } else if (savingsRate >= 20) {
-        recommendations.push({
-            type: 'success',
-            icon: '🏆',
-            title: 'Tingkat Tabungan Baik',
-            message: `Anda menabung ${savingsRate.toFixed(1)}% dari pemasukan. Luar biasa! Pertahankan.`
-        });
-    }
-    if (current.categories) {
-        const topCategories = Object.entries(current.categories)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 3);
-        if (topCategories.length > 0) {
-            const topCategory = topCategories[0];
-            const percentage = (topCategory[1] / current.keluar) * 100;
-            if (percentage > 40) {
-                recommendations.push({
-                    type: 'info',
-                    icon: '📌',
-                    title: 'Kategori Dominan',
-                    message: `${topCategory[0]} menyumbang ${percentage.toFixed(1)}% dari total pengeluaran. Pertimbangkan untuk mengoptimalkan kategori ini.`
-                });
-            }
-        }
-    }
-    if (recommendations.length === 0) {
-        recommendations.push({
-            type: 'info',
-            icon: '✅',
-            title: 'Keuangan Stabil',
-            message: 'Tidak ada masalah signifikan terdeteksi. Teruskan pengelolaan keuangan yang baik!'
-        });
-    }
+    
     container.innerHTML = recommendations.map(rec => `
         <div class="alert alert-${rec.type} d-flex align-items-start">
             <span class="me-2" style="font-size: 1.5rem;">${rec.icon}</span>
@@ -664,682 +799,249 @@ function generateRecommendations(container, current, prevMonth, prevYear) {
                 <p class="mb-0 small">${rec.message}</p>
             </div>
         </div>
-    `).join('');
+    `).join('') || '<div class="alert alert-info">✅ Keuangan Stabil</div>';
 }
 
-// ==================== SAVE TRANSACTION ====================
-async function simpan() {
-    const tanggal = document.getElementById("tanggal").value;
-    const jenis = document.getElementById("jenis").value;
-    const kategori = document.getElementById("kategori").value.trim();
-    const jumlahRaw = document.getElementById("jumlah").value;
-    const keterangan = document.getElementById("keterangan").value.trim();
-    const jumlah = parseCurrencyInput(jumlahRaw);
-    if (!tanggal || !kategori || !jumlah) {
-        alert("⚠️ Data belum lengkap!");
-        return;
-    }
-    const dataPayload = { tanggal, jenis, kategori, jumlah, keterangan: keterangan || null };
-    try {
-        if (editId) {
-            const { error } = await supabaseClient.from("transaksi").update(dataPayload).eq("id", editId);
-            if (error) throw error;
-            alert("✅ Data berhasil diupdate");
-        } else {
-            const { error } = await supabaseClient.from("transaksi").insert([dataPayload]);
-            if (error) throw error;
-            alert("✅ Data berhasil disimpan");
-        }
-        resetForm();
-        loadData();
-    } catch (error) {
-        alert("❌ Error: " + error.message);
-    }
-}
-
-// ==================== LOAD DATA ====================
-async function loadData() {
-    const bulan = document.getElementById("filterBulan").value;
-    const tahun = document.getElementById("filterTahun").value;
-    const loadingTable = document.getElementById('loadingTable');
-    const sectionTransaksi = document.getElementById('sectionTransaksi');
-    if (sectionTransaksi && sectionTransaksi.classList.contains('collapsed')) {
-        sectionTransaksi.classList.remove('collapsed');
-        const btn = document.querySelector('button[onclick*="sectionTransaksi"]');
-        if (btn) {
-            btn.classList.remove('collapsed');
-            const icon = btn.querySelector('i');
-            if (icon) icon.style.transform = 'rotate(0deg)';
-        }
-    }
-    if (loadingTable) loadingTable.classList.add('show');
-    let awal = null, akhirTanggal = null;
-    if (bulan && tahun) {
-        awal = `${tahun}-${bulan}-01`;
-        const lastDay = new Date(tahun, parseInt(bulan), 0).getDate();
-        akhirTanggal = `${tahun}-${bulan}-${String(lastDay).padStart(2, '0')}`;
-    }
-    let opening = 0;
-    if (awal) {
-        const { data: beforeData } = await supabaseClient.from("transaksi").select("jenis, jumlah").lt("tanggal", awal);
-        if (beforeData) {
-            beforeData.forEach(row => {
-                if (row.jenis === "Masuk") opening += (row.jumlah || 0);
-                else opening -= (row.jumlah || 0);
-            });
-        }
-    }
-    let query = supabaseClient.from("transaksi").select("id, tanggal, jenis, kategori, jumlah, keterangan").order("tanggal", { ascending: true }).order("id", { ascending: true });
-    if (bulan && tahun) {
-        query = query.gte("tanggal", awal).lte("tanggal", akhirTanggal);
-    }
-    const { data, error } = await query;
-    if (loadingTable) loadingTable.classList.remove('show');
-    if (error) {
-        const tbl = document.getElementById("tabelTransaksi");
-        if (tbl) tbl.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">❌ Error: ${error.message}</td></tr>`;
-        return;
-    }
-    let tabel = "", masuk = 0, keluar = 0, saldo = opening;
-    if (!data || data.length === 0) {
-        const tbl = document.getElementById("tabelTransaksi");
-        const count = document.getElementById("transactionCount");
-        if (tbl) tbl.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">📭 Belum ada transaksi</td></tr>`;
-        if (count) count.innerText = "0 transaksi";
-        updateBalanceCards(opening, 0, 0, opening, 0);
-        if (document.getElementById('sectionGrafik') && !document.getElementById('sectionGrafik').classList.contains('collapsed')) {
-            buatChart(0, 0);
-            buatChartKategori([]);
-            await buatTrend();
-        }
-        return;
-    }
-    data.forEach(row => {
-        const amount = row.jumlah || 0;
-        if (row.jenis === "Masuk") { masuk += amount; saldo += amount; }
-        else { keluar += amount; saldo -= amount; }
-        const badgeClass = row.jenis === 'Masuk' ? 'success' : 'danger';
-        const amountClass = row.jenis === 'Masuk' ? 'text-success' : 'text-danger';
-        tabel += `<tr>
-            <td><small>${formatTanggal(row.tanggal) || '-'}</small></td>
-            <td><span class="badge bg-${badgeClass}">${row.jenis}</span></td>
-            <td>${row.kategori || '-'}</td>
-            <td class="text-end fw-bold ${amountClass}">${formatRupiah(amount)}</td>
-            <td><small>${row.keterangan || '-'}</small></td>
-            <td class="text-end"><small>${formatRupiah(saldo)}</small></td>
-            <td class="text-center">
-                <button class="btn btn-warning btn-sm py-0 px-2 me-1" onclick='editData("${row.id}", "${row.tanggal}", "${row.jenis}", "${row.kategori}", "${row.jumlah}", "${row.keterangan || ''}")'><i class="bi bi-pencil"></i></button>
-                <button class="btn btn-danger btn-sm py-0 px-2" onclick="hapusData('${row.id}')"><i class="bi bi-trash"></i></button>
-            </td>
-        </tr>`;
-    });
-    const ending = opening + (masuk - keluar);
-    const count = document.getElementById("transactionCount");
-    if (count) count.innerText = `${data.length} transaksi`;
-    updateBalanceCards(opening, masuk, keluar, ending, data.length);
-    const tbl = document.getElementById("tabelTransaksi");
-    if (tbl) tbl.innerHTML = tabel;
-    if (document.getElementById('sectionGrafik') && !document.getElementById('sectionGrafik').classList.contains('collapsed')) {
-        buatChart(masuk, keluar);
-        buatChartKategori(data);
-        await buatTrend();
-    }
-    if (document.getElementById('sectionSummary') && !document.getElementById('sectionSummary').classList.contains('collapsed')) {
-        generateSummaryCategory(data);
-    }
-}
-
-// ==================== UPDATE BALANCE CARDS ====================
-function updateBalanceCards(opening, masuk, keluar, ending, total) {
-    const el = document.getElementById("openingBalance");
-    if (el) el.innerText = formatRupiah(opening);
-    const el2 = document.getElementById("totalMasuk");
-    if (el2) el2.innerText = formatRupiah(masuk);
-    const el3 = document.getElementById("totalKeluar");
-    if (el3) el3.innerText = formatRupiah(keluar);
-    const el4 = document.getElementById("endingBalance");
-    if (el4) el4.innerText = formatRupiah(ending);
-    setTimeout(() => adjustAllBalanceCards(), 100);
-}
-
-// ==================== CHART FUNCTIONS ====================
+// Chart & Visualization Functions
 function buatChart(masuk, keluar) {
-    const canvas = document.getElementById("chartKeuangan");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (chart) { chart.destroy(); chart = null; }
-    const formatAngka = (angka) => {
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(angka);
-    };
-    const formatAxis = (value) => {
-        if (value >= 1000000000) {
-            return 'Rp ' + (value / 1000000000).toFixed(1) + ' M';
-        } else if (value >= 1000000) {
-            return 'Rp ' + (value / 1000000).toFixed(1) + ' jt';
-        } else if (value >= 1000) {
-            return 'Rp ' + (value / 1000).toFixed(0) + ' rb';
-        }
-        return 'Rp ' + value;
-    };
-    chart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ["Pemasukan", "Pengeluaran"],
-            datasets: [{
-                label: "Jumlah",
-                data: [masuk || 0, keluar || 0],
-                backgroundColor: ['rgba(25, 135, 84, 0.85)', 'rgba(220, 53, 69, 0.85)'],
-                borderColor: ['rgba(25, 135, 84, 1)', 'rgba(220, 53, 69, 1)'],
-                borderWidth: 2,
-                borderRadius: 10,
-                borderSkipped: false,
-                barThickness: 'flex',
-                maxBarThickness: 100
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            aspectRatio: window.innerWidth < 576 ? 1.5 : 2,
-            layout: { padding: { top: 30, right: 30, bottom: 50, left: 30 } },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    enabled: true,
-                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                    padding: 14,
-                    cornerRadius: 8,
-                    titleFont: { size: 14, weight: 'bold', family: "'Segoe UI', sans-serif" },
-                    bodyFont: { size: 13, family: "'Segoe UI', sans-serif" },
-                    displayColors: false,
-                    callbacks: {
-                        label: function(context) {
-                            return ' ' + formatAngka(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: { color: 'rgba(0, 0, 0, 0.04)', drawBorder: false, lineWidth: 1 },
-                    ticks: {
-                        padding: 12,
-                        font: { size: window.innerWidth < 576 ? 10 : 11, family: "'Segoe UI', sans-serif" },
-                        color: '#666',
-                        maxRotation: 0,
-                        autoSkip: true,
-                        callback: function(value) { return formatAxis(value); }
-                    },
-                    border: { display: false },
-                    suggestedMax: Math.max(masuk, keluar) * 1.15
-                },
-                x: {
-                    grid: { display: false, drawBorder: false },
-                    ticks: {
-                        padding: 18,
-                        font: { size: window.innerWidth < 576 ? 12 : 13, weight: '600', family: "'Segoe UI', sans-serif" },
-                        color: '#333',
-                        maxRotation: 0,
-                        minRotation: 0
-                    },
-                    border: { display: false }
-                }
-            },
-            animation: { duration: 800, easing: 'easeOutQuart', animateScale: true, animateRotate: true },
-            onResize: (chart, size) => { chart.options.aspectRatio = size.width < 576 ? 1.5 : 2; }
-        }
-    });
-    updateStatusBox(masuk, keluar);
-    updateChartInfo(masuk, keluar);
+  if (typeof Chart === 'undefined') return;
+  const canvas = document.getElementById("chartKeuangan");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (chart) chart.destroy();
+  
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ["Pemasukan", "Pengeluaran"],
+      datasets: [{
+        data: [masuk, keluar],
+        backgroundColor: ['#198754', '#dc3545'],
+        borderRadius: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } }
+    }
+  });
+  updateStatusBox(masuk, keluar);
+  updateChartInfo(masuk, keluar);
 }
 
 function updateChartInfo(masuk, keluar) {
-    const saldo = (masuk || 0) - (keluar || 0);
-    const elPemasukan = document.getElementById('infoPemasukan');
-    const elPengeluaran = document.getElementById('infoPengeluaran');
-    const elSaldoValue = document.getElementById('infoSaldoValue');
-    const elSaldoBox = document.getElementById('infoSaldo');
-    if (elPemasukan) elPemasukan.innerText = formatRupiah(masuk || 0);
-    if (elPengeluaran) elPengeluaran.innerText = formatRupiah(keluar || 0);
-    if (elSaldoValue) elSaldoValue.innerText = formatRupiah(Math.abs(saldo));
-    if (elSaldoBox) {
-        if (saldo >= 0) {
-            elSaldoBox.className = 'info-box p-3 rounded bg-success bg-gradient text-white';
-        } else {
-            elSaldoBox.className = 'info-box p-3 rounded bg-danger bg-gradient text-white';
-        }
-    }
+  const saldo = masuk - keluar;
+  if(document.getElementById('infoPemasukan')) document.getElementById('infoPemasukan').innerText = formatRupiah(masuk);
+  if(document.getElementById('infoPengeluaran')) document.getElementById('infoPengeluaran').innerText = formatRupiah(keluar);
+  if(document.getElementById('infoSaldoValue')) document.getElementById('infoSaldoValue').innerText = formatRupiah(saldo);
+  const el = document.getElementById('infoSaldo');
+  if(el) el.className = `info-box p-3 rounded bg-${saldo >= 0 ? 'success' : 'danger'} bg-gradient text-white`;
 }
 
 function updateStatusBox(masuk, keluar) {
-    let status = "", css = "";
-    if ((masuk === 0 || !masuk) && (keluar === 0 || !keluar)) {
-        status = "⚪ Belum ada transaksi";
-        css = "status-kosong";
-    } else if ((masuk || 0) > (keluar || 0)) {
-        status = "🟢 Keuangan Membaik";
-        css = "status-baik";
-    } else if ((keluar || 0) > (masuk || 0)) {
-        status = "🔴 Keuangan Boros";
-        css = "status-boros";
-    } else {
-        status = "🟡 Keuangan normal";
-        css = "status-normal";
-    }
-    const box = document.getElementById("statusBox");
-    if (box) {
-        box.className = "p-3 rounded fw-bold " + css;
-        box.innerText = status;
-    }
+  const box = document.getElementById("statusBox");
+  if (!box) return;
+  if (!masuk && !keluar) { box.innerText = "⚪ Belum ada transaksi"; box.className = "p-3 rounded fw-bold status-kosong"; return; }
+  const isBaik = masuk > keluar;
+  box.innerText = isBaik ? "🟢 Keuangan Membaik" : "🔴 Keuangan Boros";
+  box.className = `p-3 rounded fw-bold status-${isBaik ? 'baik' : 'boros'}`;
 }
 
 function buatChartKategori(data) {
-    const canvas = document.getElementById("chartKategori");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (chartKategori) { chartKategori.destroy(); chartKategori = null; }
-    let kategoriMap = {};
-    if (data && Array.isArray(data)) {
-        data.forEach(row => {
-            if (row.jenis === "Keluar" && row.kategori) {
-                const kat = row.kategori.trim();
-                if (kat) kategoriMap[kat] = (kategoriMap[kat] || 0) + (row.jumlah || 0);
-            }
-        });
-    }
-    const labels = Object.keys(kategoriMap);
-    const values = Object.values(kategoriMap);
-    if (labels.length === 0) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.font = "14px sans-serif";
-        ctx.fillStyle = "#6c757d";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("📭 Belum ada data", canvas.width/2, canvas.height/2);
-        return;
-    }
-    const colors = ['rgba(102, 126, 234, 0.8)', 'rgba(118, 75, 162, 0.8)', 'rgba(240, 147, 251, 0.8)', 'rgba(245, 87, 108, 0.8)', 'rgba(56, 239, 125, 0.8)', 'rgba(17, 153, 142, 0.8)'];
-    chartKategori = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderColor: '#fff', borderWidth: 3 }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '60%',
-            plugins: {
-                legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, font: { size: 10 } } }
-            }
-        }
-    });
+  if (typeof Chart === 'undefined') return;
+  const canvas = document.getElementById("chartKategori");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (chartKategori) chartKategori.destroy();
+  
+  const map = {};
+  data.forEach(r => { if(r.jenis==='Keluar') map[r.kategori] = (map[r.kategori]||0) + r.jumlah; });
+  const labels = Object.keys(map);
+  const values = Object.values(map);
+  
+  chartKategori = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{ data: values, backgroundColor: ['#667eea','#764ba2','#f093fb','#f5576c','#38ef7d'] }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+  });
 }
 
 async function buatTrend() {
-    const canvas = document.getElementById("chartTrend");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (chartTrend) { chartTrend.destroy(); chartTrend = null; }
-    const { data, error } = await supabaseClient.from("transaksi").select("tanggal, jenis, jumlah").order("tanggal", { ascending: true });
-    if (error) return;
-    let monthlyData = {};
-    if (data && Array.isArray(data)) {
-        data.forEach(row => {
-            if (!row.tanggal) return;
-            const periode = row.tanggal.substring(0, 7);
-            const amount = row.jumlah || 0;
-            if (!monthlyData[periode]) monthlyData[periode] = { masuk: 0, keluar: 0 };
-            if (row.jenis === "Masuk") monthlyData[periode].masuk += amount;
-            else monthlyData[periode].keluar += amount;
-        });
+  if (typeof Chart === 'undefined') return;
+  const canvas = document.getElementById("chartTrend");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (chartTrend) chartTrend.destroy();
+  
+  const { data } = await supabaseClient.from("transaksi").select("tanggal, jenis, jumlah").eq("user_id", currentUser.id).order("tanggal", { ascending: true });
+  const monthly = {};
+  data?.forEach(r => {
+    if (r.jenis === 'Masuk') {
+      const p = r.tanggal.substring(0,7); // format: YYYY-MM
+      if(!monthly[p]) monthly[p] = 0;
+      monthly[p] += r.jumlah;
     }
-    const labels = Object.keys(monthlyData).sort();
-    const values = labels.map(l => (monthlyData[l].masuk || 0) - (monthlyData[l].keluar || 0));
-    if (labels.length === 0) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.font = "14px sans-serif";
-        ctx.fillStyle = "#6c757d";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("📈 Belum ada data", canvas.width/2, canvas.height/2);
-        return;
-    }
-    const displayLabels = labels.map(l => {
-        const [year, month] = l.split('-');
-        const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-        return months[parseInt(month)-1] + ' ' + year;
-    });
-    chartTrend = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: displayLabels,
-            datasets: [{ label: "Saldo Bersih", data: values, borderColor: "#667eea", backgroundColor: "rgba(102, 126, 234, 0.15)", fill: true, tension: 0.4 }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: true, position: 'top' } }
-        }
-    });
+  });
+  
+  chartTrend = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Object.keys(monthly),
+      datasets: [{ label: 'Pemasukan', data: Object.values(monthly), borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.4 }]
+    },
+    options: { responsive: true }
+  });
 }
 
-// ==================== SUMMARY CATEGORY ====================
-function generateSummaryCategory(data = null) {
-    const container = document.getElementById('summaryContainer');
-    if (!container) return;
-    if (!data) {
-        container.innerHTML = '<div class="col-12 text-center text-muted py-4"><small>Klik "Tampilkan" untuk melihat summary</small></div>';
-        return;
-    }
-    const summary = {};
-    if (data && Array.isArray(data) && data.length > 0) {
-        data.forEach(row => {
-            const kat = row.kategori?.trim();
-            if (!kat) return;
-            if (!summary[kat]) summary[kat] = { masuk: 0, keluar: 0, count: 0 };
-            summary[kat].count++;
-            if (row.jenis === "Masuk") summary[kat].masuk += (row.jumlah || 0);
-            else summary[kat].keluar += (row.jumlah || 0);
-        });
-    }
-    if (Object.keys(summary).length === 0) {
-        container.innerHTML = '<div class="col-12 text-center text-muted py-4"><small>Tidak ada data</small></div>';
-        return;
-    }
-    const sorted = Object.entries(summary).sort((a, b) => ((b[1].masuk || 0) + (b[1].keluar || 0)) - ((a[1].masuk || 0) + (a[1].keluar || 0)));
-    container.innerHTML = sorted.map(([kategori, stats]) => {
-        const masuk = stats.masuk || 0;
-        const keluar = stats.keluar || 0;
-        const netto = masuk - keluar;
-        const isPositive = netto >= 0;
-        return `<div class="col-md-4 col-sm-6">
-            <div class="card summary-card ${isPositive ? 'masuk' : 'keluar'} p-3 h-100">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div><h6 class="mb-0 fw-bold">${kategori}</h6><small class="text-muted">${stats.count}x transaksi</small></div>
-                    <span class="badge bg-${isPositive ? 'success' : 'danger'} rounded-pill">${isPositive ? '↑' : '↓'}</span>
-                </div>
-                <hr class="my-2">
-                <div class="row text-center small">
-                    <div class="col-6 border-end"><div class="text-success fw-bold">${formatRupiah(masuk)}</div><small class="text-muted">Masuk</small></div>
-                    <div class="col-6"><div class="text-danger fw-bold">${formatRupiah(keluar)}</div><small class="text-muted">Keluar</small></div>
-                </div>
-                <div class="mt-2 pt-2 border-top text-center">
-                    <small class="text-muted d-block">Netto</small>
-                    <strong class="${isPositive ? 'text-success' : 'text-danger'}" style="font-size: 1.1rem">${formatRupiah(Math.abs(netto))}</strong>
-                </div>
-            </div>
-        </div>`;
-    }).join('');
+function generateSummaryCategory(data) {
+  const container = document.getElementById('summaryContainer');
+  if (!container) return;
+  const summary = {};
+  data.forEach(r => {
+    if(!summary[r.kategori]) summary[r.kategori] = { masuk:0, keluar:0, count:0 };
+    summary[r.kategori].count++;
+    if(r.jenis==='Masuk') summary[r.kategori].masuk += r.jumlah;
+    else summary[r.kategori].keluar += r.jumlah;
+  });
+  
+  container.innerHTML = Object.entries(summary).map(([k, s]) => `
+    <div class="col-md-4">
+      <div class="card p-3 mb-3">
+        <h6>${k}</h6>
+        <div class="small">Masuk: <span class="text-success">${formatRupiah(s.masuk)}</span></div>
+        <div class="small">Keluar: <span class="text-danger">${formatRupiah(s.keluar)}</span></div>
+      </div>
+    </div>
+  `).join('');
 }
 
-// ==================== EDIT & DELETE ====================
-function editData(id, tanggal, jenis, kategori, jumlah, keterangan) {
-    editId = id;
-    document.getElementById("tanggal").value = tanggal || '';
-    document.getElementById("jenis").value = jenis || 'Masuk';
-    document.getElementById("kategori").value = kategori || '';
-    document.getElementById("jumlah").value = jumlah ? new Intl.NumberFormat('id-ID').format(jumlah) : '';
-    document.getElementById("keterangan").value = keterangan || '';
-    document.getElementById("btnSimpan").innerHTML = '<i class="bi bi-pencil"></i> Update';
-    window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-async function hapusData(id) {
-    if (!confirm("⚠️ Yakin ingin menghapus?")) return;
-    const { error } = await supabaseClient.from("transaksi").delete().eq("id", id);
-    if (error) { alert("❌ Error: " + error.message); return; }
-    alert("✅ Transaksi dihapus");
-    loadData();
-}
-
-// ==================== EXPORT EXCEL ====================
 async function exportExcel() {
-    const btn = document.querySelector('button[onclick="exportExcel()"]');
-    const originalText = btn ? btn.innerHTML : '';
-    if (btn) { btn.innerHTML = ' Exporting...'; btn.disabled = true; }
     try {
-        const { data, error } = await supabaseClient.from("transaksi").select("id, tanggal, jenis, kategori, jumlah, keterangan").order("tanggal", { ascending: false });
+        const { data, error } = await supabaseClient
+            .from('transaksi')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('tanggal', { ascending: true });
+
         if (error) throw error;
-        if (!data || data.length === 0) { alert("📭 Tidak ada data"); return; }
-        const exportData = data.map(row => ({ 'Tanggal': row.tanggal, 'Jenis': row.jenis, 'Kategori': row.kategori, 'Jumlah': row.jumlah, 'Keterangan': row.keterangan || '' }));
-        const ws = XLSX.utils.json_to_sheet(exportData);
+        if (!data || data.length === 0) {
+            alert('Tidak ada data untuk dieksport');
+            return;
+        }
+
+        // Format data like a bank statement
+        let runningBalance = 0;
+        const formattedData = data.map((row, index) => {
+            const amount = row.jumlah || 0;
+            const isMasuk = row.jenis === 'Masuk';
+            
+            if (isMasuk) runningBalance += amount;
+            else runningBalance -= amount;
+
+            return {
+                'No': index + 1,
+                'Tanggal': row.tanggal,
+                'Keterangan': row.keterangan || '-',
+                'Kategori': row.kategori || '-',
+                'Pemasukan (CR)': isMasuk ? amount : 0,
+                'Pengeluaran (DB)': !isMasuk ? amount : 0,
+                'Saldo': runningBalance
+            };
+        });
+
+        // Create worksheet
+        const ws = XLSX.utils.json_to_sheet(formattedData);
+        
+        // Add styling/formatting hints if possible (XLSX basic doesn't support much styling without extra plugins, but we can set column widths)
+        const wscols = [
+            {wch: 5},  // No
+            {wch: 12}, // Tanggal
+            {wch: 30}, // Keterangan
+            {wch: 15}, // Kategori
+            {wch: 15}, // Pemasukan
+            {wch: 15}, // Pengeluaran
+            {wch: 18}  // Saldo
+        ];
+        ws['!cols'] = wscols;
+
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Transaksi");
-        const filename = 'laporan_keuangan_' + new Date().toISOString().split('T')[0] + '.xlsx';
-        XLSX.writeFile(wb, filename);
-        alert('✅ Export berhasil: ' + filename);
-    } catch (err) {
-        alert("❌ Error export: " + err.message);
-    } finally {
-        if (btn && originalText) { btn.innerHTML = originalText; btn.disabled = false; }
-    }
-}
+        XLSX.utils.book_append_sheet(wb, ws, "Mutasi Keuangan");
+        
+        // Download file
+        const fileName = `Mutasi_Keuangan_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
 
-// ==================== BACKUP & RESTORE ====================
-let pendingRestoreData = null;
-
-async function exportDatabaseBackup() {
-    const modal = new bootstrap.Modal(document.getElementById('progressModal'));
-    const title = document.getElementById('progressModalTitle');
-    const message = document.getElementById('progressModalMessage');
-    const progressBar = document.getElementById('progressBar');
-    const progressDetail = document.getElementById('progressDetail');
-    title.innerText = '📦 Export Backup Database';
-    message.innerText = 'Mengambil data dari Supabase...';
-    progressBar.style.width = '0%';
-    progressDetail.innerText = '';
-    modal.show();
-    try {
-        progressBar.style.width = '20%';
-        progressDetail.innerText = 'Mengambil tabel: transaksi...';
-        let { data: transaksi, error: errTrans } = await supabaseClient.from('transaksi').select('*').order('tanggal', { ascending: true });
-        if (errTrans) throw new Error('Gagal fetch transaksi: ' + errTrans.message);
-        progressBar.style.width = '40%';
-        progressDetail.innerText = 'Mengambil tabel: kategori (jika ada)...';
-        let kategori = [];
-        let { data: katData, error: errKat } = await supabaseClient.from('kategori').select('*').order('nama_kategori', { ascending: true });
-        if (!errKat && katData) { kategori = katData; }
-        progressBar.style.width = '60%';
-        progressDetail.innerText = 'Mengumpulkan metadata...';
-        const backupData = {
-            meta: {
-                exportedAt: new Date().toISOString(),
-                exportedBy: 'Dashboard Keuangan v1.0',
-                supabaseUrl: supabaseUrl,
-                schema: {
-                    transaksi: ['id', 'tanggal', 'jenis', 'kategori', 'jumlah', 'keterangan', 'created_at'],
-                    kategori: kategori.length > 0 ? ['id', 'nama_kategori', 'created_at'] : []
-                }
-            },
-            data: { transaksi: transaksi || [], kategori: kategori || [] },
-            stats: {
-                totalTransaksi: transaksi?.length || 0,
-                totalKategori: kategori?.length || 0,
-                dateRange: transaksi?.length > 0 ? { from: transaksi[0].tanggal, to: transaksi[transaksi.length - 1].tanggal } : null
-            }
-        };
-        progressBar.style.width = '80%';
-        message.innerText = 'Membuat file backup...';
-        const jsonString = JSON.stringify(backupData, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        progressBar.style.width = '100%';
-        message.innerText = '✅ Backup siap diunduh!';
-        progressDetail.innerText = 'Mengunduh file...';
-        const a = document.createElement('a');
-        const filename = `backup_keuangan_${new Date().toISOString().split('T')[0]}_${Date.now()}.json`;
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        setTimeout(() => {
-            modal.hide();
-            alert(`✅ Backup berhasil!\n\n📁 File: ${filename}\n📊 Transaksi: ${backupData.stats.totalTransaksi}\n🏷️ Kategori: ${backupData.stats.totalKategori}\n\n💡 Simpan file ini di tempat aman!`);
-        }, 500);
     } catch (error) {
-        message.innerText = '❌ Gagal export backup';
-        progressDetail.innerText = error.message;
-        progressBar.classList.remove('progress-bar-animated');
-        progressBar.classList.add('bg-danger');
-        setTimeout(() => {
-            modal.hide();
-            progressBar.classList.remove('bg-danger');
-            progressBar.classList.add('progress-bar-animated');
-            alert('❌ Error export backup:\n' + error.message);
-        }, 1500);
+        console.error('Export error:', error);
+        alert('Gagal mengeksport data: ' + error.message);
     }
 }
 
-async function importDatabaseBackup(input) {
-    const file = input.files[0];
-    if (!file) return;
-    if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
-        alert('❌ File harus berformat .json');
-        input.value = '';
-        return;
-    }
-    try {
-        const content = await file.text();
-        const backupData = JSON.parse(content);
-        if (!backupData.meta || !backupData.data) {
-            throw new Error('Format file backup tidak valid');
-        }
-        document.getElementById('restoreFileName').innerText = file.name;
-        document.getElementById('restoreFileDate').innerText = new Date(backupData.meta.exportedAt).toLocaleString('id-ID');
-        document.getElementById('restoreFileCount').innerText = backupData.stats?.totalTransaksi || backupData.data.transaksi?.length || 0;
-        pendingRestoreData = backupData;
-        const modal = new bootstrap.Modal(document.getElementById('confirmRestoreModal'));
-        modal.show();
-    } catch (error) {
-        alert('❌ Gagal membaca file backup:\n' + error.message);
-    } finally {
-        input.value = '';
-    }
-}
-
-async function confirmRestore() {
-    if (!pendingRestoreData) {
-        alert('❌ Tidak ada data backup yang siap direstore');
-        return;
-    }
-    const confirmModal = bootstrap.Modal.getInstance(document.getElementById('confirmRestoreModal'));
-    confirmModal.hide();
-    const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
-    const title = document.getElementById('progressModalTitle');
-    const message = document.getElementById('progressModalMessage');
-    const progressBar = document.getElementById('progressBar');
-    const progressDetail = document.getElementById('progressDetail');
-    title.innerText = '🔄 Restore Database';
-    message.innerText = 'Memulai proses restore...';
-    progressBar.style.width = '0%';
-    progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
-    progressDetail.innerText = '';
-    progressModal.show();
-    try {
-        const { data: backupData } = pendingRestoreData;
-        let successCount = 0, skipCount = 0, errorCount = 0;
-        if (backupData.kategori && backupData.kategori.length > 0) {
-            progressBar.style.width = '20%';
-            message.innerText = 'Memulihkan kategori...';
-            const existingKategori = await getExistingKategori();
-            for (let i = 0; i < backupData.kategori.length; i++) {
-                const kat = backupData.kategori[i];
-                progressDetail.innerText = `Kategori ${i+1}/${backupData.kategori.length}: ${kat.nama_kategori}`;
-                if (existingKategori.includes(kat.nama_kategori)) { skipCount++; continue; }
-                const { error } = await supabaseClient.from('kategori').insert([{ nama_kategori: kat.nama_kategori }]);
-                if (error) { errorCount++; } else { successCount++; }
-                const progress = 20 + (i / backupData.kategori.length) * 20;
-                progressBar.style.width = `${progress}%`;
-                if (i % 10 === 0) await new Promise(r => setTimeout(r, 100));
-            }
-        }
-        await fetchCategoriesFromDB();
-        if (backupData.transaksi && backupData.transaksi.length > 0) {
-            progressBar.style.width = '40%';
-            message.innerText = 'Memulihkan transaksi...';
-            const existingIds = await getExistingTransaksiIds();
-            for (let i = 0; i < backupData.transaksi.length; i++) {
-                const trx = backupData.transaksi[i];
-                progressDetail.innerText = `Transaksi ${i+1}/${backupData.transaksi.length}: ${trx.tanggal}`;
-                if (existingIds.includes(trx.id)) { skipCount++; continue; }
-                const { error } = await supabaseClient.from('transaksi').insert([{
-                    tanggal: trx.tanggal,
-                    jenis: trx.jenis,
-                    kategori: trx.kategori,
-                    jumlah: trx.jumlah,
-                    keterangan: trx.keterangan || null
-                }]);
-                if (error) { errorCount++; } else { successCount++; }
-                const progress = 40 + (i / backupData.transaksi.length) * 55;
-                progressBar.style.width = `${progress}%`;
-                if (i % 20 === 0) await new Promise(r => setTimeout(r, 150));
-            }
-        }
-        progressBar.style.width = '100%';
-        message.innerText = '✅ Restore selesai!';
-        progressDetail.innerText = `Berhasil: ${successCount}, Dilewati: ${skipCount}, Error: ${errorCount}`;
-        setTimeout(async () => {
-            progressModal.hide();
-            pendingRestoreData = null;
-            await loadData();
-            alert(`🎉 Restore Selesai!\n\n✅ Data berhasil: ${successCount}\n⏭️ Dilewati (duplikat): ${skipCount}\n❌ Gagal: ${errorCount}\n\n🔄 Dashboard telah diperbarui.`);
-        }, 800);
-    } catch (error) {
-        message.innerText = '❌ Restore gagal';
-        progressDetail.innerText = error.message;
-        progressBar.classList.remove('progress-bar-animated');
-        progressBar.classList.add('bg-danger');
-        setTimeout(() => {
-            progressModal.hide();
-            progressBar.classList.remove('bg-danger');
-            progressBar.classList.add('progress-bar-animated');
-            alert('❌ Error saat restore:\n' + error.message);
-        }, 1500);
-    }
-}
-
-async function getExistingKategori() {
-    try {
-        const { data } = await supabaseClient.from('kategori').select('nama_kategori');
-        return data?.map(k => k.nama_kategori) || [];
-    } catch { return []; }
-}
-
-async function getExistingTransaksiIds() {
-    try {
-        const { data } = await supabaseClient.from('transaksi').select('id');
-        return data?.map(t => t.id) || [];
-    } catch { return []; }
-}
-
-// ==================== DOM READY ====================
-document.addEventListener('DOMContentLoaded', function() {
-    setDefaultTanggal();
-    setDefaultPeriode();
-    initYearDropdown();
-    initCategoryLookup();
-    initCurrencyInput();
+// ==================== INIT ====================
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  initYearDropdown();
+  initComparisonYearDropdown();
+  initCategoryLookup();
+  initCurrencyInput();
+  setDefaultTanggal();
+  setDefaultPeriode();
+  // Apply saved sidebar state
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && localStorage.getItem('sidebarCollapsed') === 'true') {
+    sidebar.classList.add('is-collapsed');
+  }
+  
+  // Jalankan loadData jika di halaman Dashboard (ada tabelTransaksi)
+  if (document.getElementById('tabelTransaksi')) {
     loadData();
-    window.addEventListener('resize', () => {
-        setTimeout(() => adjustAllBalanceCards(), 100);
-        if (chart) { chart.resize(); }
-        if (chartKategori) { chartKategori.resize(); }
-    });
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.category-container')) {
-            const sug = document.getElementById('kategoriSuggestions');
-            if (sug) sug.classList.remove('show');
-        }
-    });
+  }
+
+  // Event listener untuk menutup sugesti kategori saat klik di luar
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.category-container') && !e.target.closest('#kategoriSuggestions')) {
+      document.getElementById('kategoriSuggestions')?.classList.remove('show');
+    }
+  });
+
+  // Responsive chart resize
+  window.addEventListener('resize', () => {
+    setTimeout(adjustAllBalanceCards, 100);
+    if (chart) chart.resize();
+    if (chartKategori) chartKategori.resize();
+    if (chartTrend) chartTrend.resize();
+  });
+  
+  console.log("💰 Dashboard loaded safely!");
 });
 
-console.log("💰 Dashboard loaded with Comparison Feature!");
+console.log("💰 Dashboard loaded safely!");
+
+// Pastikan kode ini ada di bagian paling bawah script.js Anda
+document.addEventListener('DOMContentLoaded', function() {
+    const welcomeElement = document.getElementById('welcomeMessage');
+    const userRaw = localStorage.getItem('user');
+
+    if (userRaw && welcomeElement) {
+        let username = "";
+        try {
+            // Coba parse jika data berbentuk JSON {"username": "Nama"}
+            const userData = JSON.parse(userRaw);
+            username = userData.username || userData;
+        } catch (e) {
+            // Jika data hanya string biasa
+            username = userRaw.replace(/"/g, '');
+        }
+
+        // Tampilkan teks sesuai permintaan
+        welcomeElement.innerHTML = `Selamat Datang <strong>"${username}"</strong>, Semoga Keuangan Anda Terkontrol Dengan Baik`;
+    }
+
+    // Jalankan fungsi loadData bawaan script.js Anda
+    if (typeof loadData === "function") {
+        loadData();
+    }
+});

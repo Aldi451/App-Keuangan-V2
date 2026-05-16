@@ -1,7 +1,7 @@
-const supabaseUrl = "https://rnllunfxsidqbjtojbjc.supabase.co";
-const supabaseKey = "sb_publishable_xKbmQSrlq3nEhcGTvNy4Ng_OGYh8_it";
+var supabaseUrl = "https://qtcdtudnzlvrvtyyygwa.supabase.co";
+var supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF0Y2R0dWRuemx2cnZ0eXl5Z3dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMjEzMzAsImV4cCI6MjA4ODc5NzMzMH0.gVHcnBmD06MAMf7kw4QqHZZapuLqZ03Bqh4lFCPCu3k";
 
-const supabaseClient=supabase.createClient(supabaseUrl,supabaseKey);
+var supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
 function togglePassword(id){
 
@@ -27,61 +27,81 @@ alert("Semua field wajib diisi");
 return;
 }
 
+// Check if username or email already exists
+const { data: existingUser, error: checkError } = await supabaseClient
+    .from("users")
+    .select("username, email")
+    .or(`username.eq.${username},email.eq.${email}`);
+
+if (existingUser && existingUser.length > 0) {
+    const isEmailTaken = existingUser.some(u => u.email === email);
+    if (isEmailTaken) {
+        alert("Pendaftaran gagal: Email sudah terdaftar.");
+    } else {
+        alert("Pendaftaran gagal: Username sudah digunakan.");
+    }
+    return;
+}
+
 const {error}=await supabaseClient
 .from("users")
 .insert([{username,email,phone,password}]);
 
 if(error){
-alert("Register gagal");
+alert("Register gagal: " + error.message);
 console.log(error);
 return;
 }
 
-alert("Register berhasil");
-
-window.location.href="index.html";
-
+    alert("Register berhasil! Silakan login.");
+    window.location.href = "login.html";
 }
 
 async function login(){
+    let username = document.getElementById("username").value;
+    let password = document.getElementById("password").value;
 
-let username=document.getElementById("username").value;
-let password=document.getElementById("password").value;
+    if(!username || !password) {
+        alert("Harap isi username dan password");
+        return;
+    }
 
-const {data,error}=await supabaseClient
-.from("users")
-.select("*")
-.eq("username",username)
-.eq("password",password)
-.single();
+    const {data, error} = await supabaseClient
+        .from("users")
+        .select("*")
+        .eq("username", username)
+        .eq("password", password)
+        .single();
 
-if(error||!data){
-alert("Login gagal");
-return;
-}
+    if(error || !data){
+        alert("Username atau password salah!");
+        return;
+    }
 
-localStorage.setItem("user",JSON.stringify(data));
-
-window.location.href="dashboard.html";
-
+    localStorage.setItem("user", JSON.stringify(data));
+    window.location.href = "index.html";
 }
 
 async function lupaPassword(){
+    let input = document.getElementById("resetInput").value;
+    
+    if(!input) {
+        alert("Harap masukkan Email atau No HP");
+        return;
+    }
 
-let input=prompt("Masukkan Email atau No HP");
+    const {data, error} = await supabaseClient
+        .from("users")
+        .select("*")
+        .or(`email.eq.${input},phone.eq.${input}`);
 
-const {data}=await supabaseClient
-.from("users")
-.select("*")
-.or(`email.eq.${input},phone.eq.${input}`);
+    if(error || !data || data.length === 0){
+        alert("Data tidak ditemukan di sistem kami.");
+        return;
+    }
 
-if(data.length===0){
-alert("Data tidak ditemukan");
-return;
-}
-
-alert("Link reset password dikirim");
-
+    alert("Permintaan reset berhasil. Silakan cek email/SMS Anda.");
+    window.location.href = "login.html";
 }
 
 function logout(){
