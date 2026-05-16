@@ -1,5 +1,5 @@
 var supabaseUrl = "https://qtcdtudnzlvrvtyyygwa.supabase.co";
-var supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF0Y2R0dWRuemx2cnZ0eXl5Z3dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMjEzMzAsImV4cCI6MjA4ODc5NzMzMH0.gVHcnBmD06MAMf7kw4QqHZZapuLqZ03Bqh4lFCPCu3k";
+var supabaseKey = "sb_publishable_xKbmQSrlq3nEhcGTvNy4Ng_OGYh8_it";
 
 var supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
