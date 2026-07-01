@@ -46,14 +46,14 @@ function adjustBalanceFontSize(element) {
   const isMobile = window.innerWidth <= 576;
   let size = len > 18 ? 14 : len > 15 ? 16 : len > 12 ? 18 : 20;
   if (isMobile) {
-      size = len > 16 ? 11 : len > 13 ? 13 : 15;
-      element.style.whiteSpace = 'normal';
-      element.style.wordBreak = 'break-word';
-  } else {
-      element.style.whiteSpace = 'nowrap';
-  }
-  element.style.fontSize = size + 'px';
-  element.style.lineHeight = '1.2';
+       size = len > 16 ? 11 : len > 13 ? 13 : 15;
+       element.style.whiteSpace = 'normal';
+       element.style.wordBreak = 'break-word';
+   } else {
+       element.style.whiteSpace = 'nowrap';
+   }
+   element.style.fontSize = size + 'px';
+   element.style.lineHeight = '1.2';
 }
 function adjustAllBalanceCards() {
   document.querySelectorAll('.balance-card h3').forEach(el => adjustBalanceFontSize(el));
@@ -65,9 +65,17 @@ function setDefaultTanggal() {
 function setDefaultPeriode() {
   const bulan = document.getElementById("filterBulan");
   const tahun = document.getElementById("filterTahun");
+  
+  // Load dari localStorage jika ada
+  const savedBulan = localStorage.getItem('selectedBulan');
+  const savedTahun = localStorage.getItem('selectedTahun');
+  
   const today = new Date();
-  if (bulan) bulan.value = String(today.getMonth() + 1).padStart(2, '0');
-  if (tahun) tahun.value = today.getFullYear();
+  const defaultBulan = savedBulan || String(today.getMonth() + 1).padStart(2, '0');
+  const defaultTahun = savedTahun || today.getFullYear();
+  
+  if (bulan) bulan.value = defaultBulan;
+  if (tahun) tahun.value = defaultTahun;
 }
 function resetForm() {
   editId = null;
@@ -80,6 +88,16 @@ function resetForm() {
   if (elKet) elKet.value = "";
   if (elBtn) elBtn.innerHTML = '<i class="bi bi-save"></i> Simpan';
   setDefaultTanggal();
+}
+
+// ==================== PERIOD PERSISTENCE ====================
+function savePeriodSelection() {
+  const bulanEl = document.getElementById("filterBulan");
+  const tahunEl = document.getElementById("filterTahun");
+  if (bulanEl && tahunEl) {
+    localStorage.setItem('selectedBulan', bulanEl.value);
+    localStorage.setItem('selectedTahun', tahunEl.value);
+  }
 }
 
 // ==================== CATEGORY FUNCTIONS ====================
@@ -320,6 +338,12 @@ async function loadData() {
 
   const bulan = bulanEl?.value;
   const tahun = tahunEl?.value;
+  
+  // Simpan pilihan periode ke localStorage
+  if (bulan && tahun) {
+    savePeriodSelection();
+  }
+  
   let awal = null, akhir = null;
   if (bulan && tahun) {
     awal = `${tahun}-${bulan}-01`;
@@ -421,13 +445,32 @@ function editData(id, t, j, k, n, ket) {
 }
 
 async function hapusData(id) {
-  if (!confirm("⚠️ Yakin ingin menghapus?")) return;
-  const { error } = await supabaseClient.from("transaksi").delete().eq("id", id).eq("user_id", currentUser.id);
-  if (error) { 
-    alert(error.code === '42501' ? "❌ Izin hapus ditolak. Aktifkan Policy DELETE di Supabase." : "❌ " + error.message); 
-    return; 
+  if (!confirm("⚠️ Yakin ingin menghapus data ini?")) return;
+  
+  try {
+    // Hapus dengan kondisi yang ketat untuk keamanan
+    const { error } = await supabaseClient
+      .from("transaksi")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", currentUser.id);
+    
+    if (error) {
+      console.error('Delete error:', error);
+      if (error.code === '42501') {
+        alert("❌ Izin hapus ditolak. Hubungi admin atau periksa policy DELETE di Supabase.");
+      } else {
+        alert("❌ Gagal menghapus: " + error.message);
+      }
+      return;
+    }
+    
+    alert("✅ Data berhasil dihapus");
+    loadData();
+  } catch(e) {
+    console.error('Exception on delete:', e);
+    alert("❌ Error: " + e.message);
   }
-  alert("✅ Berhasil dihapus"); loadData();
 }
 
 // ==================== CHARTS & SUMMARY (Dipotong demi ringkas, logic aman) ====================
