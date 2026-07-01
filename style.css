@@ -621,6 +621,11 @@ body {
     border-bottom: 1px solid var(--border-color);
 }
 
+.table tr:hover {
+    background: var(--primary-soft);
+    transition: background-color 0.2s ease;
+}
+
 .table td {
     color: var(--text-main);
 }
@@ -842,6 +847,25 @@ body {
 .show { display: block !important; }
 .d-none { display: none !important; }
 
+/* ==================== BUTTON STYLING IMPROVEMENTS ==================== */
+.btn-warning, .btn-danger, .btn-primary, .btn-success {
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.btn-warning:hover, .btn-danger:hover, .btn-primary:hover, .btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-sm {
+    transition: all 0.2s ease;
+}
+
+.btn-sm:hover {
+    transform: scale(1.05);
+}
+
 /* ==================== MOBILE RESPONSIVE ==================== */
 @media (max-width: 1024px) {
     .sidebar {
@@ -933,7 +957,7 @@ body {
     }
     
     .table th, .table td {
-        padding: 6px;
+        padding: 8px;
     }
     
     .btn-action {
